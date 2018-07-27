@@ -1,0 +1,27 @@
+---
+- name: restart-eap
+  shell: su - jboss -c "{{ eap_basedir }}/{{ item }}/bin/proc.sh stop;{{ eap_basedir }}/{{ item }}/bin/proc.sh start"
+  args:
+    warn: False
+  with_items: "{{ eap_refresh_list | unique }}"
+  listen: "restart eap instance"
+  no_log: False
+
+- name: start_eap_instance
+  shell: su - jboss -c "{{ eap_basedir }}/{{ item }}/bin/proc.sh start"
+  args:
+    warn: False
+  with_items: "{{ eap_start_list | unique }}"
+  listen: "start eap instance"
+  no_log: False
+  when: item not in eap_refresh_list
+
+- name: stop_eap_instance
+  shell: su - jboss -c "{{ eap_basedir }}/{{ item }}/bin/proc.sh stop"
+  args:
+    warn: False
+  with_items: "{{ eap_stop_list | unique }}"
+  listen: "stop eap instance"
+  no_log: False
+  when: item not in eap_refresh_list
+

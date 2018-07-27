@@ -1,0 +1,60 @@
+## -*- shell-script -*- ######################################################
+##                                                                          ##
+##  JBoss Bootstrap Script Configuration                                    ##
+##                                                                          ##
+##############################################################################
+
+{% if eap_ld_library_path is defined %}
+{% if eap_ld_library_path|length > 0 %}
+export LD_LIBRARY_PATH="{{ eap_ld_library_path|join(':') }}"
+{% endif %}
+{% endif %}
+JAVA_HOME="{{ eap_java_home }}"
+LOGDIR="/var/log/{{ eap_instance_name }}"
+NODENAME="{{ ansible_hostname }}-{{ eap_instance_name }}"
+PORTOFFSET={{ eap_port_offset }}
+GC_LOG="{{ eap_gclog|lower }}"
+JBOSS_MODULEPATH="{{ eap_jboss_home_dir }}/modules:{{ eap_basedir }}/jboss-eap-{{ eap_version }}/modules"
+
+if [ "x$JBOSS_MODULES_SYSTEM_PKGS" = "x" ]; then
+   JBOSS_MODULES_SYSTEM_PKGS="org.jboss.byteman"
+fi
+
+JAVA_OPTS=""
+{% for opt in eap_java_opts %}
+JAVA_OPTS="$JAVA_OPTS {{ opt }}"
+{% endfor %}
+{% if appdynamics is defined %}
+{% if eap_appdynamics_ensure == 'present' %}
+{% if appdynamics_version[0]|int > 3 %}
+JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=com.singularity -javaagent:{{ wxx_dirs.app_dir }}/AppDynamics/AppServerAgent/ver{{ appdynamics_version }}/javaagent.jar"
+{% else %}
+JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=com.singularity -javaagent:{{ wxx_dirs.app_dir }}/AppDynamics/AppServerAgent/javaagent.jar"
+{% endif %}
+{% for property in eap_appdynamics_system_properties %}
+JAVA_OPTS="$JAVA_OPTS {{ property }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+
+# Sample JPDA settings for remote socket debugging
+#JAVA_OPTS="$JAVA_OPTS -agentlib:jdwp=transport=dt_socket,address=8787,server=y,suspend=n"
+
+# Sample JPDA settings for shared memory debugging
+#JAVA_OPTS="$JAVA_OPTS -agentlib:jdwp=transport=dt_shmem,server=y,suspend=n,address=jboss"
+
+# Uncomment to not use JBoss Modules lockless mode
+#JAVA_OPTS="$JAVA_OPTS -Djboss.modules.lockless=false"
+
+# Uncomment to gather JBoss Modules metrics
+#JAVA_OPTS="$JAVA_OPTS -Djboss.modules.metrics=true"
+
+# Uncomment this to run with a security manager enabled
+# SECMGR="true"
+
+# Uncomment this in order to be able to run WildFly on FreeBSD
+# when you get "epoll_create function not implemented" message in dmesg output
+#JAVA_OPTS="$JAVA_OPTS -Djava.nio.channels.spi.SelectorProvider=sun.nio.ch.PollSelectorProvider"
+
+# Uncomment this out to control garbage collection logging
+# GC_LOG="true"

@@ -1,0 +1,122 @@
+#!/bin/bash
+
+set -m
+
+RUNUSER={{ eap_user }}
+
+if [ $RUNUSER != $USER ]
+then
+        echo "USER must be \"$RUNUSER\". EXIT!"
+        exit 1
+fi
+
+ACTION=$1
+USAGE="$(basename $0) start|stop|restart|status"
+PID=""
+HOST={{ ansible_fqdn }}
+PORT={{ eap_http_port }}
+INSTANCE={{ eap_instance_name }}
+LOGDIR="/var/log/{{ eap_instance_name }}"
+NODENAME="{{ ansible_hostname }}-{{ eap_instance_name }}"
+JBOSSHOMEDIR="{{ eap_jboss_home_dir }}"
+JBOSSBASEDIR="{{ eap_jboss_base_dir }}"
+JBOSS_CONSOLE_LOG="${LOGDIR}/server.log"
+STARTUPMSG="WFLYSRV0025"
+export JBOSS_MODULEPATH="{{ eap_jboss_home_dir }}/modules:{{ eap_basedir }}/jboss-eap-{{ eap_version }}/modules"
+typeset -i START_TIMEOUT=60
+typeset -i STOP_TIMEOUT=60
+typeset -i RC=0
+typeset -i running=0
+typeset -i count=0
+
+if [ ! -e $(dirname $JBOSS_CONSOLE_LOG) ]
+then
+  mkdir -p $(dirname $JBOSS_CONSOLE_LOG)
+fi
+
+get_pid() {
+        proc=($(ps -ef|grep Djboss.node.name=$NODENAME|grep -v grep))
+        echo "${proc[1]}"
+}
+
+start() {
+        PID=$(get_pid)
+        if [ -z "$PID" ]
+        then
+          echo -n "Starting instance $NODENAME: "
+          cd $JBOSSBASEDIR/bin
+          $JBOSSBASEDIR/bin/standalone.sh > $JBOSS_CONSOLE_LOG 2>&1 &
+          RC=$?
+          if (( $RC == 0 ))
+          then
+            echo -e "\tOK"
+          else
+            echo -e "\tFAILED"
+          fi
+          return $RC
+        else
+          echo "Instance $NODENAME is already running"
+          return 0
+        fi
+}
+
+stop() {
+        PID=$(get_pid)
+        if [ -z "$PID" ]
+        then
+          echo "Instance $NODENAME is not running"
+          return 0
+        else
+          echo -n "Stopping instance $NODENAME: "
+          PID=$(get_pid)
+          ${JBOSSBASEDIR}/bin/jboss-cli.sh -c shutdown
+          PID=$(get_pid)
+          while [ ! -z "$PID" ]
+          do
+             sleep 1
+             STOP_TIMEOUT=$STOP_TIMEOUT-1
+             if [ $STOP_TIMEOUT -le 0 ]
+             then
+               kill -9 $PID
+               echo -e "\tTIMEOUT reached, Server killed!"
+               break
+             fi
+             PID=$(get_pid)
+          done
+          echo -e "\tOK"
+          return 0
+        fi
+}
+
+case $ACTION in
+
+        start)
+                start
+                RC=$?
+                exit $RC
+                ;;
+        stop)
+                stop
+                RC=$?
+                exit $RC
+                ;;
+        restart)
+                stop && start
+                RC=$?
+                exit $RC
+                ;;
+        status)
+                PID=$(get_pid)
+                if [ -z "$PID" ]
+                then
+                  echo "Instance $NODENAME is not running"
+                  exit 3
+                else
+                  proc_uptime=$(date -d "`ps -p $PID -o lstart=`" +'%d.%m.%Y-%H:%M:%S')
+                  echo "Instance $NODENAME is running since $proc_uptime (PID: $PID)"
+                  exit 0
+                fi
+                ;;
+        *)      echo $USAGE
+                ;;
+esac

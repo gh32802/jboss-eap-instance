@@ -1,0 +1,125 @@
+---
+### INSTALL EAP instance(s)
+
+- block:
+
+  - name: Create EAP instance
+    shell: > 
+      rm -rf "{{ eap_basedir }}/{{ eap_instance_name }}"; 
+      rsync -av "{{ eap_basedir }}/jboss-eap-{{ eap_version }}/" 
+      --exclude modules/* --exclude .installation 
+      --chown jboss:jboss "{{ eap_basedir }}/{{ eap_instance_name }}/"
+    register: rsync_result
+    args:
+      creates: "{{ eap_basedir }}/{{ eap_instance_name }}/devk-jboss-eap-{{ eap_version }}.txt"
+      warn: False
+
+  - block:
+    - set_fact: 
+        eap_appdynamics_system_properties: []
+
+    - name: "Manage AppDynamics configuration for {{ eap_instance_name }}"
+      set_fact: 
+        eap_appdynamics_system_properties={{ eap_appdynamics_system_properties + [ '-Dappdynamics.agent.' + property.key + '=' + property.value ] }}
+      with_dict: "{{ eap_appdynamics_properties }}"
+      loop_control:
+        loop_var: 'property'
+      no_log: True
+    when: eap_appdynamics is defined
+
+  - name: "Manage standalone.conf {{ eap_instance_name }}"
+    template: 
+      src: standalone.conf.j2 
+      dest: "{{ eap_jboss_base_dir }}/bin/standalone.conf" 
+      mode: 0640
+      owner: jboss
+      group: jboss
+    register: standalone_conf_result
+    notify: "restart eap instance"
+    tags:
+      - install
+      - config
+    no_log: False
+ 
+  - name: "Set eap_refresh_list for standalone.conf {{ eap_instance_name }}"
+    set_fact: eap_refresh_list={{ eap_refresh_list + [ eap_instance_name ] }}
+    when: standalone_conf_result.changed and eap_instance_status == 'running'
+    tags:
+      - install
+      - config
+    no_log: True
+
+  - name: "Set cli port for {{ eap_instance_name }}"
+    replace:
+      dest: "{{ eap_jboss_base_dir }}/bin/jboss-cli.xml"
+      regexp: '(^\s+)<port>\d+<\/port>'
+      replace: "\\1<port>{{ eap_cli_port }}</port>"
+    no_log: False
+
+  - name: "Install proc script for {{ eap_instance_name }}"
+    template: 
+      src: proc.sh.j2 
+      dest: "{{ eap_basedir }}/{{ eap_instance_name }}/bin/proc.sh"
+      mode: 0750
+      owner: jboss
+      group: jboss
+    tags:
+      - install
+      - config
+ 
+  - include_tasks: manage_svc.yml
+
+  - name: "Get eap status for {{ eap_instance_name }}"
+    shell: 
+      "ps -ef|grep {{ ansible_hostname }}-{{ eap_instance_name }}|grep -v grep|awk '{ print $2 }'"
+    register: pid
+    changed_when: pid.rc != 0
+    no_log: True
+    check_mode: no
+
+  - name: "Set eap_start_list for {{ eap_instance_name }}"
+    set_fact: eap_start_list={{ eap_start_list + [ eap_instance_name ] }}
+    when: eap_instance_status == 'running' and pid.stdout == ""
+    notify: "start eap instance"
+    changed_when: pid.stdout == ""
+    tags:
+      - start
+    no_log: True
+
+  - name: "Set eap_stop_list for {{ eap_instance_name }}"
+    set_fact: eap_stop_list={{ eap_stop_list + [ eap_instance_name ] }}
+    when: eap_instance_status == 'stopped' and pid.stdout != ""
+    notify: "stop eap instance"
+    changed_when: pid.stdout != ""
+    tags:
+      - stop
+    no_log: True
+
+  when: eap_instance_ensure == 'present'
+
+### UNINSTALL JBOSS-EAP instance(s)
+- block:
+
+  - include_tasks: manage_svc.yml
+
+  - name: "Get EAP pid for {{ eap_instance_name }}"
+    shell: 
+      "ps -ef|grep {{ eap_instance_name }}|grep -v grep|awk '{ print $2 }'"
+    register: get_pid
+    changed_when: get_pid.stdout != ""
+    no_log: True
+    check_mode: no
+ 
+  - name : "Stop {{ eap_instance_name }} if running"
+    command: kill -9 {{ get_pid.stdout }}
+    when: get_pid.stdout != ""
+    no_log: True
+ 
+  - name: "Remove instance directory for {{ eap_instance_name }}"
+    file: 
+      path: "{{ eap_jboss_home_dir }}" 
+      state: absent 
+    register: remove_eap_result
+
+  when: eap_instance_ensure == 'absent'
+
