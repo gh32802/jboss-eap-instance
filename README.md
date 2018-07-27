@@ -76,7 +76,7 @@ eap_instances:
       - name: 'bigl/bigl-log-formatter'
         version: '1.0.0'
         
-        eap_instances:
+eap_instances:
   - name: eap-vpu
     ensure: present
     enable: True
