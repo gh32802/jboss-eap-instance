@@ -1,4 +1,4 @@
-# Role jboss-eap
+# Role jboss-eap-instance
 
 ## Creates instances of Jboss-EAP Application server
 
