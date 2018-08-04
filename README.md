@@ -75,4 +75,29 @@ eap_instances:
         file: 'rsm-security.tar.gz'
       - name: 'bigl/bigl-log-formatter'
         version: '1.0.0'
+        
+eap_instances:
+  - name: eap-vpu
+    ensure: present
+    enable: True
+    status: running
+    is_managed: True
+    eap_version: 7.1.0
+    eap_basedir: /opt
+    #java_version: 8u171
+    gclog: True
+    port_offset: 0
+    java_opts:
+      - '-Xms512m'
+      - '-Xmx512m'
+      - '-XX:MaxMetaspaceSize=128m'
+      - '-Djava.net.preferIPv4Stack=true'
+      - '-Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS'
+      - '-Djava.awt.headless=true'
+      - '-Djboss.modules.policy-permissions=true'
+      - '-Djboss.socket.binding.port-offset=$PORTOFFSET'
+      - '-Djboss.node.name=$NODENAME'
+      - '-Djboss.server.log.dir=$LOGDIR' 
+      - '-Djboss.bind.address=0.0.0.0'
+      - '-Djboss.bind.address.management=127.0.0.1'
 ```
