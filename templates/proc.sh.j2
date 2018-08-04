@@ -23,7 +23,7 @@ JBOSSBASEDIR="{{ eap_jboss_base_dir }}"
 JBOSS_CONSOLE_LOG="${LOGDIR}/server.log"
 STARTUPMSG="WFLYSRV0025"
 export JBOSS_MODULEPATH="{{ eap_jboss_home_dir }}/modules:{{ eap_basedir }}/jboss-eap-{{ eap_version }}/modules"
-typeset -i START_TIMEOUT=60
+typeset -i START_TIMEOUT=10
 typeset -i STOP_TIMEOUT=60
 typeset -i RC=0
 typeset -i running=0
@@ -41,12 +41,27 @@ get_pid() {
 
 start() {
         PID=$(get_pid)
+        JBOSS_PID=""
+        JBOSS_STATUS=""
+        typeset -i WAITTIME=0
         if [ -z "$PID" ]
         then
           echo -n "Starting instance $NODENAME: "
           cd $JBOSSBASEDIR/bin
           $JBOSSBASEDIR/bin/standalone.sh > $JBOSS_CONSOLE_LOG 2>&1 &
-          RC=$?
+          JBOSS_PID=$!
+          RC=0
+          while (( $WAITTIME < $START_TIMEOUT ))
+          do
+            JBOSS_STATUS=$(ps -p $JBOSS_PID --no-headers)
+            if [ -z "$JBOSS_STATUS" ]
+            then
+              RC=1
+              break
+            fi
+            sleep 1
+            (( WAITTIME++ ))
+          done
           if (( $RC == 0 ))
           then
             echo -e "\tOK"
